@@ -1,10 +1,11 @@
 # ── CineMatch: Production Serving Dependencies (Render Cloud Deployment) ──
 # Optimized for lightweight, fast cloud build without PySpark or heavy training packages.
 
-# Data & Parquet Loading
-numpy>=1.24.0,<2.0
-pandas>=2.0.0
-pyarrow>=14.0.0
+# Data & Parquet Loading (pinned for NumPy 1.x / PyArrow ABI compatibility)
+numpy>=1.26.0,<2.0.0
+pandas>=2.2.0,<3.0.0
+pyarrow>=14.0.0,<18.0.0
+fastparquet>=2024.2.0
 
 # Machine Learning & Vector Search
 tensorflow>=2.16.0,<2.18

@@ -147,6 +147,16 @@ class HealthResponse(BaseModel):
 # -----------------------------------------------------------------------------
 # Application State Container & Lifespan
 # -----------------------------------------------------------------------------
+def safe_read_parquet(path, columns=None):
+    """Read parquet with graceful engine fallback between pyarrow, fastparquet, and auto."""
+    for engine in ["pyarrow", "fastparquet", "auto"]:
+        try:
+            return pd.read_parquet(path, columns=columns, engine=engine)
+        except Exception:
+            continue
+    return pd.read_parquet(path, columns=columns)
+
+
 class ModelManager:
     """Singleton container for thread-safe model and index instances."""
 
@@ -179,7 +189,7 @@ class ModelManager:
         # 1. Movie Metadata
         meta_parquet = data_dir / "movie_features"
         if meta_parquet.exists():
-            df_m = pd.read_parquet(meta_parquet, columns=["movieId", "title", "genres"])
+            df_m = safe_read_parquet(meta_parquet, columns=["movieId", "title", "genres"])
             self.movie_meta = {
                 str(r.movieId): (str(r.title), str(r.genres))
                 for r in df_m.itertuples()
@@ -189,7 +199,7 @@ class ModelManager:
         # 2. Train History (Consumed Items for Filtering)
         train_parquet = data_dir / "train"
         if train_parquet.exists():
-            df_t = pd.read_parquet(train_parquet, columns=["userId", "movieId"])
+            df_t = safe_read_parquet(train_parquet, columns=["userId", "movieId"])
             for uid, mid in zip(df_t["userId"].values, df_t["movieId"].values):
                 u_str = str(uid)
                 if u_str not in self.train_consumed:

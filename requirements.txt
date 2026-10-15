@@ -1,8 +1,9 @@
 # ── Phase 1: Core data processing ─────────────────────────────────
 pyspark>=4.0.0
-numpy>=1.24.0,<2.0
-pandas>=2.0.0
-pyarrow>=14.0.0
+numpy>=1.26.0,<2.0.0
+pandas>=2.2.0,<3.0.0
+pyarrow>=14.0.0,<18.0.0
+fastparquet>=2024.2.0
 
 # ── Phase 2: Retrieval model ─────────────────────────────────────
 tensorflow>=2.16.0,<2.18
