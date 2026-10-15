@@ -211,6 +211,24 @@ class TwoTowerModel(tfrs.Model):
         _ = model.user_tower(dummy_user)
         _ = model.movie_tower(dummy_movie)
 
-        model.load_weights(str(weights_file))
+        try:
+            model.load_weights(str(weights_file))
+        except Exception as e:
+            logger.warning(f"Standard load_weights failed ({e}), loading directly from HDF5 datasets...")
+            import h5py
+            with h5py.File(weights_file, "r") as h5f:
+                for k in h5f.keys():
+                    norm_k = k.replace("\\", "/")
+                    if "user_embedding" in norm_k and "vars" in h5f[k]:
+                        model.user_tower.user_embedding.set_weights([h5f[k]["vars"]["0"][:]])
+                    elif "user_tower" in norm_k and "dense" in norm_k and "vars" in h5f[k]:
+                        model.user_tower.dense.set_weights([h5f[k]["vars"]["0"][:], h5f[k]["vars"]["1"][:]])
+                    elif "movie_embedding" in norm_k and "vars" in h5f[k]:
+                        model.movie_tower.movie_embedding.set_weights([h5f[k]["vars"]["0"][:]])
+                    elif "genre_dense" in norm_k and "vars" in h5f[k]:
+                        model.movie_tower.genre_dense.set_weights([h5f[k]["vars"]["0"][:], h5f[k]["vars"]["1"][:]])
+                    elif ("projection" in norm_k or "movie_projection" in norm_k) and "vars" in h5f[k]:
+                        model.movie_tower.projection.set_weights([h5f[k]["vars"]["0"][:], h5f[k]["vars"]["1"][:]])
+
         logger.info(f"Loaded TwoTowerModel from {save_path}")
         return model

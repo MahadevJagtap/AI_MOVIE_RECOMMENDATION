@@ -301,7 +301,28 @@ class WideOnlyModel(keras.Model):
             "dense_features": tf.constant([[0.0] * cfg.get("n_dense_features", 5)], dtype=tf.float32),
         }
         _ = model(dummy)
-        model.load_weights(str(save_path / "model.weights.h5"))
+
+        try:
+            model.load_weights(str(save_path / "model.weights.h5"))
+        except Exception as e:
+            logger.warning(f"Standard load_weights failed for WideOnlyModel ({e}), loading directly from HDF5...")
+            import h5py
+            with h5py.File(save_path / "model.weights.h5", "r") as h5f:
+                for k in h5f.keys():
+                    norm_k = k.replace("\\", "/")
+                    if "user_linear" in norm_k and "vars" in h5f[k]:
+                        model.wide.user_linear.embeddings.assign(h5f[k]["vars"]["0"][:])
+                    elif "movie_linear" in norm_k and "vars" in h5f[k]:
+                        model.wide.movie_linear.embeddings.assign(h5f[k]["vars"]["0"][:])
+                    elif "act_pop_linear" in norm_k and "vars" in h5f[k]:
+                        model.wide.act_pop_linear.embeddings.assign(h5f[k]["vars"]["0"][:])
+                    elif "rating_cross_linear" in norm_k and "vars" in h5f[k]:
+                        model.wide.rating_cross_linear.embeddings.assign(h5f[k]["vars"]["0"][:])
+                    elif "dense_linear" in norm_k and "vars" in h5f[k]:
+                        model.wide.dense_linear.kernel.assign(h5f[k]["vars"]["0"][:])
+                    elif norm_k == "wide" and "vars" in h5f[k] and "0" in h5f[k]["vars"]:
+                        model.wide.bias.assign(h5f[k]["vars"]["0"][:])
+
         logger.info(f"Loaded WideOnlyModel from {save_path}")
         return model
 
@@ -431,6 +452,64 @@ class WideAndDeepModel(keras.Model):
             "dense_features": tf.constant([[0.0] * cfg.get("n_dense_features", 5)], dtype=tf.float32),
         }
         _ = model(dummy)
-        model.load_weights(str(save_path / "model.weights.h5"))
+
+        try:
+            model.load_weights(str(save_path / "model.weights.h5"))
+        except Exception as e:
+            logger.warning(f"Standard load_weights failed for WideAndDeepModel ({e}), loading directly from HDF5...")
+            import h5py
+            with h5py.File(save_path / "model.weights.h5", "r") as h5f:
+                for k in h5f.keys():
+                    norm_k = k.replace("\\", "/")
+                    # Wide component weights
+                    if "user_linear" in norm_k and "vars" in h5f[k]:
+                        model.wide.user_linear.embeddings.assign(h5f[k]["vars"]["0"][:])
+                    elif "movie_linear" in norm_k and "vars" in h5f[k]:
+                        model.wide.movie_linear.embeddings.assign(h5f[k]["vars"]["0"][:])
+                    elif "act_pop_linear" in norm_k and "vars" in h5f[k]:
+                        model.wide.act_pop_linear.embeddings.assign(h5f[k]["vars"]["0"][:])
+                    elif "rating_cross_linear" in norm_k and "vars" in h5f[k]:
+                        model.wide.rating_cross_linear.embeddings.assign(h5f[k]["vars"]["0"][:])
+                    elif "dense_linear" in norm_k and "vars" in h5f[k]:
+                        model.wide.dense_linear.kernel.assign(h5f[k]["vars"]["0"][:])
+                    elif norm_k == "wide" and "vars" in h5f[k] and "0" in h5f[k]["vars"]:
+                        model.wide.bias.assign(h5f[k]["vars"]["0"][:])
+                    # Deep component weights
+                    elif "user_emb" in norm_k and "vars" in h5f[k]:
+                        model.deep.user_emb.embeddings.assign(h5f[k]["vars"]["0"][:])
+                    elif "movie_emb" in norm_k and "vars" in h5f[k]:
+                        model.deep.movie_emb.embeddings.assign(h5f[k]["vars"]["0"][:])
+                    elif "genre_dense" in norm_k and "vars" in h5f[k]:
+                        model.deep.genre_dense.kernel.assign(h5f[k]["vars"]["0"][:])
+                        model.deep.genre_dense.bias.assign(h5f[k]["vars"]["1"][:])
+                    elif "mlp_layers" in norm_k and "vars" in h5f[k]:
+                        if "dense_2" in norm_k:
+                            model.deep.mlp_layers[6].kernel.assign(h5f[k]["vars"]["0"][:])
+                            model.deep.mlp_layers[6].bias.assign(h5f[k]["vars"]["1"][:])
+                        elif "dense_1" in norm_k:
+                            model.deep.mlp_layers[3].kernel.assign(h5f[k]["vars"]["0"][:])
+                            model.deep.mlp_layers[3].bias.assign(h5f[k]["vars"]["1"][:])
+                        elif norm_k.endswith("dense"):
+                            model.deep.mlp_layers[0].kernel.assign(h5f[k]["vars"]["0"][:])
+                            model.deep.mlp_layers[0].bias.assign(h5f[k]["vars"]["1"][:])
+                        elif "batch_normalization_2" in norm_k:
+                            model.deep.mlp_layers[7].gamma.assign(h5f[k]["vars"]["0"][:])
+                            model.deep.mlp_layers[7].beta.assign(h5f[k]["vars"]["1"][:])
+                            model.deep.mlp_layers[7].moving_mean.assign(h5f[k]["vars"]["2"][:])
+                            model.deep.mlp_layers[7].moving_variance.assign(h5f[k]["vars"]["3"][:])
+                        elif "batch_normalization_1" in norm_k:
+                            model.deep.mlp_layers[4].gamma.assign(h5f[k]["vars"]["0"][:])
+                            model.deep.mlp_layers[4].beta.assign(h5f[k]["vars"]["1"][:])
+                            model.deep.mlp_layers[4].moving_mean.assign(h5f[k]["vars"]["2"][:])
+                            model.deep.mlp_layers[4].moving_variance.assign(h5f[k]["vars"]["3"][:])
+                        elif norm_k.endswith("batch_normalization"):
+                            model.deep.mlp_layers[1].gamma.assign(h5f[k]["vars"]["0"][:])
+                            model.deep.mlp_layers[1].beta.assign(h5f[k]["vars"]["1"][:])
+                            model.deep.mlp_layers[1].moving_mean.assign(h5f[k]["vars"]["2"][:])
+                            model.deep.mlp_layers[1].moving_variance.assign(h5f[k]["vars"]["3"][:])
+                    elif "projection" in norm_k and "vars" in h5f[k]:
+                        model.deep.projection.kernel.assign(h5f[k]["vars"]["0"][:])
+                        model.deep.projection.bias.assign(h5f[k]["vars"]["1"][:])
+
         logger.info(f"Loaded WideAndDeepModel from {save_path}")
         return model
