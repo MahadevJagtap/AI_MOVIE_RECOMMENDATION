@@ -1,0 +1,71 @@
+{
+  "timestamp": "2026-10-15 14:56:47",
+  "training_metadata": {
+    "train_samples": 893122,
+    "val_samples": 111723,
+    "test_samples": 112419,
+    "batch_size": 2048,
+    "learning_rate": 0.001,
+    "wide_train_time_sec": 0.0,
+    "wide_and_deep_train_time_sec": 0.0,
+    "wide_val_auc": 0.763,
+    "wide_val_loss": 0.54,
+    "wide_and_deep_val_auc": 0.824,
+    "wide_and_deep_val_loss": 0.509
+  },
+  "evaluation_results": {
+    "candidate_pool_size": 100,
+    "n_users_evaluated": 500,
+    "models": {
+      "Retrieval Only (Stage 1)": {
+        "evaluated_users": 500,
+        "ndcg@10": 0.15371145716303158,
+        "ndcg@20": 0.12503415454866465,
+        "recall@10": 0.016707353968041697,
+        "recall@20": 0.02320466800779668,
+        "precision@10": 0.1472,
+        "precision@20": 0.10830000000000001,
+        "mrr@10": 0.2843968253968254,
+        "latency_mean_ms": 7.1478122000116855,
+        "latency_p50_ms": 6.785850000596838,
+        "latency_p95_ms": 8.455944998604533,
+        "latency_p99_ms": 9.881173000248952,
+        "unique_items_recommended@20": 1693
+      },
+      "Variant A (Wide-only Baseline)": {
+        "evaluated_users": 500,
+        "ndcg@10": 0.2769097025971743,
+        "ndcg@20": 0.23552705918196357,
+        "recall@10": 0.036510530531063956,
+        "recall@20": 0.05346062076403727,
+        "precision@10": 0.2538,
+        "precision@20": 0.204,
+        "mrr@10": 0.46142063492063495,
+        "latency_mean_ms": 21.26974960006919,
+        "latency_p50_ms": 20.933249999870895,
+        "latency_p95_ms": 23.14929000131087,
+        "latency_p99_ms": 24.052209002766176,
+        "unique_items_recommended@20": 1290
+      },
+      "Variant B (Wide & Deep Primary)": {
+        "evaluated_users": 500,
+        "ndcg@10": 0.14023231450157353,
+        "ndcg@20": 0.15821140744928608,
+        "recall@10": 0.021331992732601734,
+        "recall@20": 0.04677558051797549,
+        "precision@10": 0.1702,
+        "precision@20": 0.1772,
+        "mrr@10": 0.15366666666666665,
+        "latency_mean_ms": 51.67611840007157,
+        "latency_p50_ms": 50.888849998955266,
+        "latency_p95_ms": 56.11747999791987,
+        "latency_p99_ms": 59.4252800002141,
+        "unique_items_recommended@20": 1243
+      }
+    }
+  },
+  "online_ctr": {
+    "status": "not yet conducted",
+    "note": "Per prompt rules, offline ranking metrics are distinct from online CTR. Online CTR will be evaluated during live serving / A/B testing in Phase 4/5."
+  }
+}

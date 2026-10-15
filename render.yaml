@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: cinematch
+    runtime: python
+    plan: free
+    region: oregon
+    branch: main
+    buildCommand: "pip install --upgrade pip && pip install -r requirements-serve.txt"
+    startCommand: "uvicorn src.serving.api:app --host 0.0.0.0 --port $PORT"
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: TF_USE_LEGACY_KERAS
+        value: "1"
+      - key: DEV_MODE
+        value: "True"
+      - key: TRITON_ENABLED
+        value: "False"
+      - key: REDIS_HOST
+        value: "127.0.0.1"
+      - key: MALLOC_ARENA_MAX
+        value: "2"

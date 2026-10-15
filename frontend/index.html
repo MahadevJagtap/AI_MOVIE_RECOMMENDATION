@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CineMatch — Movies Picked for You</title>
+  <meta name="description" content="Personalized movie discovery powered by a two-stage machine learning recommendation engine.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎬</text></svg>">
+  <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+
+  <!-- Top Sticky Navigation Bar -->
+  <nav class="navbar" role="navigation" aria-label="Main Navigation">
+    <div class="nav-container">
+      <div class="nav-brand" id="brand-home" tabindex="0" role="button" aria-label="CineMatch Home">
+        <span class="brand-icon">🎬</span>
+        <span class="brand-name">Cine<span>Match</span></span>
+      </div>
+
+      <div class="nav-links">
+        <button class="nav-tab-btn active" data-view="discover">🎬 Discover</button>
+        <button class="nav-tab-btn" data-view="watchlist">❤️ My Watchlist</button>
+        <button class="nav-tab-btn" data-view="insights">📊 System Insights</button>
+        <button class="nav-tab-btn" data-view="about">ℹ️ How It Works</button>
+      </div>
+
+      <div class="nav-status" id="system-status-indicator" title="FastAPI Serving Status">
+        <span class="status-dot online" id="status-dot"></span>
+        <span id="status-text">System Online</span>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main View Container -->
+  <main class="main-wrapper">
+
+    <!-- ====================================================================
+         VIEW 1: DISCOVER MOVIES (Primary Consumer View)
+         ==================================================================== -->
+    <section class="view-section active" id="discover-view" aria-label="Movie Discovery">
+      
+      <!-- Hero Header -->
+      <header class="hero-header">
+        <h1 class="hero-title">Movies picked for you.</h1>
+        <div class="hero-subtitle">Discover films tailored to your personal taste.</div>
+        <p class="hero-desc">
+          Choose a sample viewer profile or enter your user ID, select your favorite genre, and explore instant personalized recommendations.
+        </p>
+      </header>
+
+      <!-- Preferences & Search Controls Card -->
+      <section class="filter-card" aria-label="Recommendation Preferences">
+        <div class="filter-grid">
+          
+          <!-- Profile Selector -->
+          <div class="input-group">
+            <label class="input-label" for="profile-select">👤 Viewer Profile</label>
+            <select class="select-control" id="profile-select">
+              <option value="198" selected>Alex (Comedy &amp; Action)</option>
+              <option value="662">Jordan (Drama &amp; Romance)</option>
+              <option value="805">Taylor (Action &amp; Sci-Fi)</option>
+              <option value="924">Morgan (Drama &amp; Action)</option>
+              <option value="999999">Guest (New / Cold-Start Viewer)</option>
+            </select>
+          </div>
+
+          <!-- Genre Filter -->
+          <div class="input-group">
+            <label class="input-label" for="genre-select">🎭 Genre Filter</label>
+            <select class="select-control" id="genre-select">
+              <option value="All Genres" selected>All Genres</option>
+              <option value="Action">Action</option>
+              <option value="Adventure">Adventure</option>
+              <option value="Animation">Animation</option>
+              <option value="Comedy">Comedy</option>
+              <option value="Crime">Crime</option>
+              <option value="Drama">Drama</option>
+              <option value="Fantasy">Fantasy</option>
+              <option value="Horror">Horror</option>
+              <option value="Mystery">Mystery</option>
+              <option value="Romance">Romance</option>
+              <option value="Sci-Fi">Sci-Fi</option>
+              <option value="Thriller">Thriller</option>
+            </select>
+          </div>
+
+          <!-- Count Selector -->
+          <div class="input-group">
+            <label class="input-label" for="count-select">🔢 Count</label>
+            <select class="select-control" id="count-select">
+              <option value="6">6 Movies</option>
+              <option value="9" selected>9 Movies</option>
+              <option value="12">12 Movies</option>
+              <option value="15">15 Movies</option>
+              <option value="20">20 Movies</option>
+            </select>
+          </div>
+
+          <!-- Action Button -->
+          <div class="input-group">
+            <button class="btn-primary" id="btn-find-movies" aria-label="Find Movies">
+              <span>✨</span> Find My Movies
+            </button>
+          </div>
+
+        </div>
+
+        <!-- Collapsible Advanced Options -->
+        <div class="advanced-toggle-bar">
+          <button class="advanced-toggle-btn" id="advanced-toggle-btn" type="button" aria-expanded="false">
+            ▶ ⚙️ Advanced Preferences &amp; Scoring Options
+          </button>
+          
+          <div class="advanced-drawer" id="advanced-drawer">
+            <div class="input-group">
+              <label class="input-label" for="custom-user-input">Custom User ID</label>
+              <input type="text" class="text-control" id="custom-user-input" placeholder="Leave empty for selected profile" autocomplete="off">
+            </div>
+
+            <div class="input-group">
+              <label class="input-label" for="variant-select">Ranking Architecture</label>
+              <select class="select-control" id="variant-select">
+                <option value="wide_and_deep" selected>Wide &amp; Deep (Primary Neural)</option>
+                <option value="wide_only">Wide-only (Linear Baseline)</option>
+              </select>
+            </div>
+
+            <div class="checkbox-group">
+              <input type="checkbox" class="checkbox-control" id="show-scores-checkbox">
+              <label class="checkbox-label" for="show-scores-checkbox">Show Model Match Scores</label>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Results Grid Container (Populated via JavaScript) -->
+      <section id="results-container" aria-label="Recommended Movies" aria-live="polite">
+        <!-- Skeleton loaders or movie cards rendered here -->
+      </section>
+
+    </section>
+
+    <!-- ====================================================================
+         VIEW 2: MY WATCHLIST (Durable SQLite Persistent Feedback)
+         ==================================================================== -->
+    <section class="view-section" id="watchlist-view" aria-label="My Watchlist">
+      
+      <header class="insights-header">
+        <h2 class="insights-title">❤️ My Saved Watchlist</h2>
+        <p class="insights-desc" id="watchlist-header-desc">
+          Movies you have marked as Interested or Saved. Persisted durably in SQLite across page refreshes and backend restarts.
+        </p>
+      </header>
+
+      <div id="watchlist-container" aria-live="polite">
+        <!-- Populated via JavaScript from SQLite database -->
+      </div>
+
+    </section>
+
+    <!-- ====================================================================
+         VIEW 2: SYSTEM INSIGHTS & EVALUATION (Academic & Grading Deliverable)
+         ==================================================================== -->
+    <section class="view-section" id="insights-view" aria-label="System Insights">
+      
+      <header class="insights-header">
+        <h2 class="insights-title">📊 Architecture &amp; Evaluation Insights</h2>
+        <p class="insights-desc">
+          Inspect two-stage candidate retrieval vs neural reranking, monitor live user interaction CTR, and review offline benchmarks.
+        </p>
+      </header>
+
+      <!-- Subtabs Navigation -->
+      <div class="subtabs-bar">
+        <button class="subtab-btn active" data-subtab="inspect">🔍 Two-Stage Pipeline Inspector</button>
+        <button class="subtab-btn" data-subtab="ctr">📈 Live User CTR &amp; Attribution</button>
+        <button class="subtab-btn" data-subtab="offline">🏆 Offline Model Benchmarks</button>
+      </div>
+
+      <!-- Subtab 1: Pipeline Inspector -->
+      <div class="subtab-content active" id="subtab-inspect">
+        <p style="font-size: 0.92rem; color: var(--text-muted); margin-bottom: 1.2rem;">
+          Compare how high-diversity candidate generation from <strong>Two-Tower vector search (FAISS CPU over 62,423 titles)</strong> is reprioritized by the <strong>Wide &amp; Deep pointwise neural ranker</strong>.
+        </p>
+        
+        <div class="pipeline-columns">
+          <div>
+            <div class="pipeline-col-header" style="color: #60a5fa;">
+              <span>🔹</span> Stage 1: Candidate Pool (FAISS FlatIP)
+            </div>
+            <div id="stage1-candidates-list">
+              <!-- Populated by JS -->
+            </div>
+          </div>
+
+          <div>
+            <div class="pipeline-col-header" style="color: #34d399;">
+              <span>🔸</span> Stage 2: Reranked (Neural Ranker)
+            </div>
+            <div id="stage2-recommendations-list">
+              <!-- Populated by JS -->
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Subtab 2: Live CTR Tracking -->
+      <div class="subtab-content" id="subtab-ctr">
+        <p style="font-size: 0.92rem; color: var(--text-muted); margin-bottom: 1.2rem;">
+          Click-Through Rate (CTR) is tracked strictly from <strong>genuine impression and click interaction events</strong> recorded in this browser session. Offline ratings are explicitly decoupled from online CTR.
+        </p>
+
+        <div class="metrics-row">
+          <div class="metric-card">
+            <div class="metric-number" id="ctr-impressions">0</div>
+            <div class="metric-title">Total Impressions</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-number" id="ctr-clicks">0</div>
+            <div class="metric-title">Total User Clicks</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-number highlight" id="ctr-overall">0.00%</div>
+            <div class="metric-title">Live Demo CTR</div>
+          </div>
+        </div>
+
+        <div class="table-wrapper">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Model Variant</th>
+                <th>Impressions</th>
+                <th>Clicks</th>
+                <th>Variant CTR</th>
+              </tr>
+            </thead>
+            <tbody id="ctr-variant-tbody">
+              <!-- Populated by JS -->
+            </tbody>
+          </table>
+        </div>
+
+        <div class="message-box info" id="ctr-disclaimer-box">
+          <span>📌</span>
+          <div id="ctr-disclaimer">
+            Recorded from genuine user interactions in this session.
+          </div>
+        </div>
+      </div>
+
+      <!-- Subtab 3: Offline Benchmarks -->
+      <div class="subtab-content" id="subtab-offline">
+        <p style="font-size: 0.92rem; color: var(--text-muted); margin-bottom: 1.2rem;">
+          Evaluated on 500 held-out MovieLens users under a strictly chronological temporal split (80% train / 10% val / 10% test) with positive relevance threshold &ge; 3.5.
+        </p>
+
+        <div class="table-wrapper">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Pipeline Architecture</th>
+                <th>NDCG@10</th>
+                <th>Recall@10</th>
+                <th>Precision@10</th>
+                <th>MRR@10</th>
+                <th>P95 Latency</th>
+                <th>Catalog Coverage</th>
+              </tr>
+            </thead>
+            <tbody id="offline-benchmarks-tbody">
+              <!-- Populated by JS -->
+            </tbody>
+          </table>
+        </div>
+
+        <div class="about-grid" style="margin-top: 1.5rem;">
+          <div class="about-card">
+            <div class="about-step-num">Stage 1 Analysis</div>
+            <div class="about-card-title">Broad Retrieval</div>
+            <div class="about-card-desc">
+              Two-Tower retrieval prioritizes high recall and catalog coverage, surfacing over 1,693 distinct catalog titles across 500 test users in 8.46 ms P95 search time.
+            </div>
+          </div>
+          <div class="about-card">
+            <div class="about-step-num">Variant A Analysis</div>
+            <div class="about-card-title">Linear Wide-only</div>
+            <div class="about-card-desc">
+              Strong memorization baseline achieving NDCG@10 of 0.2769 and MRR@10 of 0.4614 by leveraging cross features between user activity and movie popularity.
+            </div>
+          </div>
+          <div class="about-card">
+            <div class="about-step-num">Variant B Analysis</div>
+            <div class="about-card-title">Wide &amp; Deep Neural</div>
+            <div class="about-card-desc">
+              Combines linear cross memorization with multi-layer perceptron generalization, capturing subtle non-linear preference representations with highest validation AUC (0.824).
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ====================================================================
+         VIEW 3: HOW IT WORKS (Educational Overview)
+         ==================================================================== -->
+    <section class="view-section" id="about-view" aria-label="How It Works">
+      
+      <header class="insights-header">
+        <h2 class="insights-title">ℹ️ How CineMatch Personalizes Movies</h2>
+        <p class="insights-desc">
+          CineMatch operates a modern two-stage recommendation architecture, the same pattern utilized by services like Netflix and YouTube to deliver sub-second recommendations across tens of thousands of items.
+        </p>
+      </header>
+
+      <div class="about-grid">
+        <div class="about-card">
+          <div class="about-step-num">Stage 1 &bull; Retrieval</div>
+          <div class="about-card-title">1. Candidate Retrieval</div>
+          <div class="about-card-desc">
+            A <strong>TensorFlow Recommenders Two-Tower</strong> neural network maps users and movies into a shared 64-dimensional embedding space.
+            <strong>FAISS CPU</strong> vector index instantly searches all <strong>62,423 titles</strong> in under <strong>2 ms</strong> to find the top ~100 candidate matches.
+          </div>
+        </div>
+
+        <div class="about-card">
+          <div class="about-step-num">Stage 2 &bull; Ranking</div>
+          <div class="about-card-title">2. Neural Pointwise Ranking</div>
+          <div class="about-card-desc">
+            A <strong>Wide &amp; Deep</strong> neural network scores candidate movies using interaction crosses, user activity statistics, genre embeddings, and vector similarity features to prioritize the final recommendations.
+          </div>
+        </div>
+
+        <div class="about-card">
+          <div class="about-step-num">Resilience &bull; Serving</div>
+          <div class="about-card-title">3. Intelligent Fallback</div>
+          <div class="about-card-desc">
+            New guests and cold-start users are seamlessly served top global crowd-favorites. Movies previously rated by the user are automatically filtered out, and responses are cached in <strong>Redis</strong> for sub-5ms repeat requests.
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toast-container" aria-live="assertive"></div>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="footer-content">
+      <div>
+        <strong>CineMatch Recommendation Engine</strong> &bull; MovieLens 25M Two-Stage ML Pipeline
+      </div>
+      <div class="footer-links">
+        <a class="footer-link" href="/docs" target="_blank" rel="noopener noreferrer">📖 OpenAPI Docs</a>
+        <a class="footer-link" href="/health" target="_blank" rel="noopener noreferrer">🩺 Health Status</a>
+        <a class="footer-link" href="/metrics/ctr" target="_blank" rel="noopener noreferrer">📈 CTR API</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>

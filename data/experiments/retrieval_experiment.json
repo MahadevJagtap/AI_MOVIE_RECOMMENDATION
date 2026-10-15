@@ -1,0 +1,37 @@
+{
+  "timestamp": "2026-10-15 14:26:49",
+  "config": {
+    "embedding_dim": 64,
+    "epochs": 5,
+    "batch_size": 4096,
+    "learning_rate": 0.1,
+    "train_duration_sec": 0.0,
+    "n_users_train": 6141,
+    "n_movies_train": 16965,
+    "n_movies_indexed": 62423
+  },
+  "metrics": {
+    "two_tower": {
+      "recall@10": 0.0265,
+      "recall@20": 0.0365,
+      "recall@50": 0.0796,
+      "candidate_catalog_coverage": 3434,
+      "avg_retrieval_latency_ms": 7.4,
+      "p95_retrieval_latency_ms": 8.45,
+      "evaluated_users_count": 500
+    },
+    "popularity_baseline": {
+      "recall@10": 0.051,
+      "recall@20": 0.0864,
+      "recall@50": 0.154,
+      "candidate_catalog_coverage": 261,
+      "avg_retrieval_latency_ms": 2.16,
+      "p95_retrieval_latency_ms": 4.51,
+      "evaluated_users_count": 500
+    }
+  },
+  "artifact_paths": {
+    "retrieval_model_dir": "D:\\setup\\recommendation-engine\\models\\retrieval",
+    "faiss_index_dir": "D:\\setup\\recommendation-engine\\models\\faiss"
+  }
+}

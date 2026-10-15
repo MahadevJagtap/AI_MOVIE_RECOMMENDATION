@@ -1,0 +1,32 @@
+{
+  "versions": {
+    "v1.0.0-test": {
+      "version": "v1.0.0-test",
+      "published_at": "2026-10-15T10:21:34.210664Z",
+      "status": "ACTIVE",
+      "artifacts": {
+        "retrieval_model": "models/retrieval/model.weights.h5",
+        "faiss_index": "models/faiss/faiss_index.bin",
+        "wide_only_model": "models/ranking/wide_only/model.weights.h5",
+        "wide_and_deep_model": "models/ranking/wide_and_deep/model.weights.h5",
+        "pipeline_config": "models/ranking/pipeline/ranking_pipeline_config.json"
+      },
+      "quality_gate": "PASSED"
+    },
+    "v-dev-verified": {
+      "version": "v-dev-verified",
+      "published_at": "2026-10-15T10:54:21.856844+00:00",
+      "status": "ACTIVE",
+      "artifacts": {
+        "retrieval_model": "models/retrieval/model.weights.h5",
+        "faiss_index": "models/faiss/faiss_index.bin",
+        "wide_only_model": "models/ranking/wide_only/model.weights.h5",
+        "wide_and_deep_model": "models/ranking/wide_and_deep/model.weights.h5",
+        "pipeline_config": "models/ranking/pipeline/ranking_pipeline_config.json"
+      },
+      "quality_gate": "PASSED"
+    }
+  },
+  "active_version": "v-dev-verified",
+  "updated_at": "2026-10-15T10:54:21.856844+00:00"
+}

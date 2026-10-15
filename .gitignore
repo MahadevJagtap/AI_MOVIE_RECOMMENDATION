@@ -1,0 +1,69 @@
+# ── Python ──────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+
+# ── Virtual environments ───────────────────────
+venv/
+.venv/
+env/
+
+# ── IDE ────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── OS ─────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Data (raw & heavy ETL temporary files) ─────
+data/raw/
+data/spark_tmp/
+data/processed/val/
+data/processed/test/
+*.csv
+*.crc
+
+# Note: The following lightweight serving datasets (~8MB total) MUST be tracked in git for Render:
+# data/processed/movie_features/ (catalog titles and genres, 1.8MB)
+# data/processed/user_features/  (user activity statistics, 0.2MB)
+# data/processed/train/          (consumed item history for filtering, 6.0MB)
+# data/processed/popularity/     (top 500 cold-start items, 0.01MB)
+# data/experiments/ranking_experiment.json (offline metrics for UI)
+
+# ── Models (Serving artifacts tracked in git) ──
+# Triton server repository is not used in standalone Render cloud web service
+models/triton_model_repository/
+
+# Note: Lightweight trained serving models (~62MB total, all files <18MB) MUST be tracked:
+# models/retrieval/ (Two-Tower weights & embeddings, 27MB)
+# models/ranking/   (Wide & Deep weights & pipeline config, 19MB)
+# models/faiss/     (FAISS vector index, 16MB)
+
+# ── Environment & Secrets ──────────────────────
+.env
+
+# ── Logs ───────────────────────────────────────
+logs/
+*.log
+airflow/logs/
+
+# ── Cache & Databases ──────────────────────────
+.cache/
+.pytest_cache/
+*.db
+data/feedback/*.db
+data/feedback/*.jsonl
+
+# ── Spark ──────────────────────────────────────
+spark-warehouse/
+derby.log
+metastore_db/
