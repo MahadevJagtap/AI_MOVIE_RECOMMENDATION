@@ -10,6 +10,13 @@ from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Optional
 
+try:
+    from dotenv import load_dotenv
+    # Load .env from project root if it exists
+    load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+except ImportError:
+    pass
+
 
 def _env(key: str, default: str) -> str:
     return os.environ.get(key, default)
@@ -91,6 +98,11 @@ TRITON_MODEL_REPOSITORY = Path(_env("TRITON_MODEL_REPOSITORY", str(MODELS_DIR / 
 
 # ── Experiment ──────────────────────────────────────────────────────
 EXPERIMENT_LOG_DIR = Path(_env("EXPERIMENT_LOG_DIR", str(PROJECT_ROOT / "data" / "experiments")))
+
+# ── OMDb API (Movie Posters) ────────────────────────────────────────
+OMDB_API_KEY = _env("OMDB_API_KEY", "")
+OMDB_TIMEOUT = _env_float("OMDB_TIMEOUT", 3.0)
+POSTER_CACHE_DIR = Path(_env("POSTER_CACHE_DIR", str(PROJECT_ROOT / "data" / "cache")))
 
 
 @dataclass

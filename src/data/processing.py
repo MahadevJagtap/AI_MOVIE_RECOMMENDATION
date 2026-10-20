@@ -55,7 +55,13 @@ def create_spark_session(
     # Windows Hadoop configuration
     hadoop_dir = os.environ.get("HADOOP_HOME")
     if not hadoop_dir:
-        candidate_paths = [Path("d:/setup/hadoop"), Path("C:/hadoop")]
+        candidate_paths = [
+            Path(__file__).resolve().parents[3] / "hadoop",
+            Path(__file__).resolve().parents[2] / "hadoop",
+            Path("d:/project_2/hadoop"),
+            Path("d:/setup/hadoop"),
+            Path("C:/hadoop"),
+        ]
         for cp in candidate_paths:
             if (cp / "bin" / "winutils.exe").exists():
                 hadoop_dir = str(cp.resolve())

@@ -30,6 +30,7 @@ const state = {
   watchlistItems: [],
   backendHealth: null,
   movieImpressionIds: new Map(), // movieId -> eventId
+  posterCache: new Map(), // movieId -> posterUrl
 };
 
 // DOM Elements Cache
@@ -355,26 +356,26 @@ function renderRecommendations(recData) {
   emitImpressions(items, recData);
 }
 
-/** Build Individual Movie Card DOM (Safe from XSS) */
-function buildMovieCard(item, recData) {
-  const card = document.createElement('div');
-  card.className = 'movie-card';
-
+/** Create consistent 2:3 Movie Poster Element with lazy image, shimmer loader, and robust fallback */
+function createCardPoster(item, rank = null) {
   const { title: cleanTitle, year } = parseTitleAndYear(item.title);
   const glyph = getGenreGlyph(item.genres);
   const gradient = getGenreGradient(item.genres);
-  const imdbSearchUrl = `https://www.imdb.com/find?q=${encodeURIComponent(cleanTitle)}`;
+  const midStr = String(item.movie_id);
 
-  // 1. Poster Artwork Area
   const poster = document.createElement('div');
   poster.className = 'card-poster';
   poster.style.background = gradient;
 
-  const rankBadge = document.createElement('span');
-  rankBadge.className = 'badge-rank';
-  rankBadge.textContent = `#${item.rank}`;
-  poster.appendChild(rankBadge);
+  // 1. Rank badge
+  if (rank !== null && rank !== undefined) {
+    const rankBadge = document.createElement('span');
+    rankBadge.className = 'badge-rank';
+    rankBadge.textContent = `#${rank}`;
+    poster.appendChild(rankBadge);
+  }
 
+  // 2. Release year badge
   if (year) {
     const yearBadge = document.createElement('span');
     yearBadge.className = 'badge-year';
@@ -382,11 +383,115 @@ function buildMovieCard(item, recData) {
     poster.appendChild(yearBadge);
   }
 
-  const glyphEl = document.createElement('div');
-  glyphEl.className = 'card-poster-glyph';
-  glyphEl.textContent = glyph;
-  poster.appendChild(glyphEl);
+  // 3. Fallback artwork with genre glyph and primary genre label
+  const fallback = document.createElement('div');
+  fallback.className = 'card-poster-fallback';
+  const primaryGenre = (item.genres || '').split('|').filter(Boolean)[0] || 'Film';
+  fallback.innerHTML = `
+    <div class="card-poster-glyph">${glyph}</div>
+    <div class="fallback-genre-text">${escapeHtml(primaryGenre)}</div>
+  `;
+  poster.appendChild(fallback);
 
+  // 4. Subtle dark gradient overlay on poster bottom for text readability
+  const overlay = document.createElement('div');
+  overlay.className = 'card-poster-overlay';
+  poster.appendChild(overlay);
+
+  // 5. Determine poster URL
+  const posterUrl = item.poster_url || (state.posterCache && state.posterCache.get(midStr));
+
+  if (posterUrl && posterUrl !== 'N/A' && posterUrl.startsWith('http')) {
+    const loader = document.createElement('div');
+    loader.className = 'card-poster-loader';
+    poster.appendChild(loader);
+
+    const img = document.createElement('img');
+    img.className = 'card-poster-img';
+    img.alt = `Poster for ${cleanTitle}${year ? ` (${year})` : ''}`;
+    img.loading = 'eager';
+    img.referrerPolicy = 'no-referrer';
+
+    img.onload = () => {
+      img.classList.add('loaded');
+      if (loader && loader.parentNode) loader.parentNode.removeChild(loader);
+      fallback.style.display = 'none';
+      if (state.posterCache) state.posterCache.set(midStr, posterUrl);
+    };
+
+    img.onerror = () => {
+      if (img && img.parentNode) img.parentNode.removeChild(img);
+      if (loader && loader.parentNode) loader.parentNode.removeChild(loader);
+      fallback.style.display = 'flex';
+    };
+
+    img.src = posterUrl;
+    if (img.complete && img.naturalWidth > 0) {
+      img.classList.add('loaded');
+      if (loader && loader.parentNode) loader.parentNode.removeChild(loader);
+      fallback.style.display = 'none';
+    }
+    poster.appendChild(img);
+  } else if (!posterUrl && midStr) {
+    // Lazy fetch poster asynchronously if missing from initial payload
+    fetchPosterLazy(midStr, cleanTitle, poster, fallback);
+  }
+
+  return poster;
+}
+
+/** Lazy fetch poster for a movie card when not provided in initial response */
+async function fetchPosterLazy(movieId, title, posterContainer, fallbackEl) {
+  if (state.posterCache && state.posterCache.has(movieId)) {
+    const cached = state.posterCache.get(movieId);
+    if (!cached) return;
+    attachPosterImage(posterContainer, fallbackEl, cached, title);
+    return;
+  }
+
+  try {
+    const query = new URLSearchParams({ title: title || '' });
+    const res = await apiFetch(`/poster/${encodeURIComponent(movieId)}?${query}`);
+    if (res && res.poster_url && res.poster_url.startsWith('http')) {
+      if (state.posterCache) state.posterCache.set(movieId, res.poster_url);
+      attachPosterImage(posterContainer, fallbackEl, res.poster_url, title);
+    } else {
+      if (state.posterCache) state.posterCache.set(movieId, null);
+    }
+  } catch (err) {
+    if (state.posterCache) state.posterCache.set(movieId, null);
+  }
+}
+
+/** Attach loaded poster image element to card poster container */
+function attachPosterImage(container, fallbackEl, url, title) {
+  if (!container || !url) return;
+  const img = document.createElement('img');
+  img.className = 'card-poster-img';
+  img.alt = `Poster for ${title || 'Movie'}`;
+  img.loading = 'lazy';
+  img.onload = () => {
+    img.classList.add('loaded');
+    if (fallbackEl) fallbackEl.style.display = 'none';
+  };
+  img.onerror = () => {
+    if (img.parentNode) img.parentNode.removeChild(img);
+    if (fallbackEl) fallbackEl.style.display = 'flex';
+  };
+  img.src = url;
+  container.appendChild(img);
+}
+
+/** Build Individual Movie Card DOM (Safe from XSS) */
+function buildMovieCard(item, recData) {
+  const card = document.createElement('div');
+  card.className = 'movie-card';
+
+  const { title: cleanTitle, year } = parseTitleAndYear(item.title);
+  const imdbSearchUrl = `https://www.imdb.com/find?q=${encodeURIComponent(cleanTitle)}`;
+
+  // 1. Poster Artwork Area with 2:3 Aspect Ratio and OMDb Artwork
+  const poster = createCardPoster(item, item.rank);
   card.appendChild(poster);
 
   // 2. Card Content Area
@@ -584,24 +689,10 @@ function renderWatchlistView() {
     card.className = 'movie-card';
 
     const { title: cleanTitle, year } = parseTitleAndYear(item.title);
-    const glyph = getGenreGlyph(item.genres);
-    const gradient = getGenreGradient(item.genres);
     const imdbSearchUrl = `https://www.imdb.com/find?q=${encodeURIComponent(cleanTitle)}`;
 
-    // Poster
-    const poster = document.createElement('div');
-    poster.className = 'card-poster';
-    poster.style.background = gradient;
-    if (year) {
-      const yb = document.createElement('span');
-      yb.className = 'badge-year';
-      yb.textContent = year;
-      poster.appendChild(yb);
-    }
-    const glyphEl = document.createElement('div');
-    glyphEl.className = 'card-poster-glyph';
-    glyphEl.textContent = glyph;
-    poster.appendChild(glyphEl);
+    // Poster Artwork Area with 2:3 Aspect Ratio and OMDb Artwork
+    const poster = createCardPoster(item, null);
     card.appendChild(poster);
 
     // Content

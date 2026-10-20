@@ -131,12 +131,24 @@ source venv/bin/activate
 
 ### 3. Install Serving Dependencies
 ```bash
-# Lean serving dependencies (FastAPI, TensorFlow, FAISS, PyArrow)
+# Lean serving dependencies (FastAPI, TensorFlow, FAISS, PyArrow, HTTPX)
 pip install --upgrade pip
 pip install -r requirements-serve.txt
 ```
 
-### 4. Launch the CineMatch Recommendation Service
+### 4. Configure Environment & OMDb API Key
+Create a `.env` file from `.env.example` in the project root:
+```bash
+cp .env.example .env
+```
+Add your free OMDb API key (obtainable at [omdbapi.com](https://www.omdbapi.com/apikey.aspx)):
+```env
+OMDB_API_KEY=your_api_key_here
+OMDB_TIMEOUT=3.0
+```
+> **Security Note:** The `.env` file is excluded in `.gitignore`. Never commit actual API keys to source control. When `OMDB_API_KEY` is not set or unavailable, CineMatch automatically renders stylized CSS-glassmorphic fallback posters with genre icons without interrupting recommendation serving.
+
+### 5. Launch the CineMatch Recommendation Service
 ```bash
 # Set legacy Keras flag (required for tf_keras compatibility)
 # Windows:
@@ -148,16 +160,16 @@ export TF_USE_LEGACY_KERAS="1"
 uvicorn src.serving.api:app --host 0.0.0.0 --port 8000
 ```
 
-### 5. Access the Application
+### 6. Access the Application
 - **Interactive Web App:** Open `http://localhost:8000/` in your browser.
 - **Interactive API Documentation:** Open `http://localhost:8000/docs` (Swagger UI).
 - **Health Endpoint:** Open `http://localhost:8000/health`.
 
 ---
 
-## 4. Cloud Deployment on Render
+## 4. Cloud Deployment (Render & Google Cloud Run)
 
-This repository includes turnkey configuration for deploying on [Render](https://render.com) without Docker or WSL2:
+This repository includes turnkey configuration for deploying on [Render](https://render.com) and [Google Cloud Run](https://cloud.google.com/run):
 - [`render.yaml`](render.yaml): Render Blueprint specification.
 - [`requirements-serve.txt`](requirements-serve.txt): Lean serving manifest (70 MB serving models tracked, excluding heavy 310 MB PySpark wheel).
 - [`.python-version`](.python-version): Pins Python `3.11.9`.
@@ -176,8 +188,13 @@ This repository includes turnkey configuration for deploying on [Render](https:/
    - `DEV_MODE`: `True`
    - `TRITON_ENABLED`: `False`
    - `MALLOC_ARENA_MAX`: `2`
+   - `OMDB_API_KEY`: `your_omdb_api_key` *(Set as a secure environment variable or Secret)*
 5. Under **Advanced**, set **Health Check Path** to `/health`.
 6. Click **Create Web Service**. Your live recommendation engine will be available at `https://<service-name>.onrender.com`.
+
+### Google Cloud Run Deployment:
+For containerized deployment on Google Cloud Run:
+- Pass `OMDB_API_KEY` securely using Secret Manager (`--set-secrets="OMDB_API_KEY=omdb-key:latest"`) or as a secure environment variable (`--set-env-vars="OMDB_API_KEY=..."`). Never hardcode the key in the Dockerfile.
 
 ---
 

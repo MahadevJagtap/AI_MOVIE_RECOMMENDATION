@@ -48,6 +48,9 @@ from configs.config import (
     REDIS_TTL,
     TRITON_URL,
     TRITON_ENABLED,
+    OMDB_API_KEY,
+    OMDB_TIMEOUT,
+    POSTER_CACHE_DIR,
 )
 from src.retrieval.two_tower import TwoTowerModel
 from src.retrieval.faiss_index import FAISSIndexManager
@@ -56,6 +59,7 @@ from src.features.ranking_features import RankingFeaturePipeline
 from src.ranking.wide_and_deep import WideOnlyModel, WideAndDeepModel
 from src.serving.cache import RedisCacheManager
 from src.serving.feedback import FeedbackEvent, FeedbackLogger
+from src.serving.posters import MoviePosterService
 from src.serving.triton_client import TritonInferenceClient
 
 logging.basicConfig(
@@ -77,6 +81,7 @@ class RecommendationItem(BaseModel):
     score: float
     rank: int
     source: str
+    poster_url: Optional[str] = None
 
 
 class RecommendationResponse(BaseModel):
@@ -97,6 +102,7 @@ class CandidateItem(BaseModel):
     genres: str
     retrieval_score: float
     rank: int
+    poster_url: Optional[str] = None
 
 
 class CandidateResponse(BaseModel):
@@ -113,6 +119,7 @@ class PopularMovieItem(BaseModel):
     genres: str
     popularity_score: float
     rank: int
+    poster_url: Optional[str] = None
 
 
 class PopularResponse(BaseModel):
@@ -126,6 +133,7 @@ class WatchlistItem(BaseModel):
     genres: str
     timestamp: str
     event_id: str
+    poster_url: Optional[str] = None
 
 
 class UserFeedbackResponse(BaseModel):
@@ -133,6 +141,21 @@ class UserFeedbackResponse(BaseModel):
     saved_movie_ids: List[str]
     total_saved: int
     watchlist: List[WatchlistItem]
+
+
+class PosterResponse(BaseModel):
+    movie_id: str
+    poster_url: Optional[str] = None
+    title: Optional[str] = None
+    source: str = "omdb"
+
+
+class PosterBatchRequest(BaseModel):
+    movie_ids: List[str]
+
+
+class PosterBatchResponse(BaseModel):
+    posters: Dict[str, Optional[str]]
 
 
 class HealthResponse(BaseModel):
@@ -170,6 +193,7 @@ class ModelManager:
         self.cache: Optional[RedisCacheManager] = None
         self.feedback_logger: Optional[FeedbackLogger] = None
         self.triton_client: Optional[TritonInferenceClient] = None
+        self.poster_service: Optional[MoviePosterService] = None
         self.movie_meta: Dict[str, Tuple[str, str]] = {}  # mid -> (title, genres)
         self.train_consumed: Dict[str, Set[int]] = {}     # uid -> set of int(mid)
         self.user_vocab_set: Set[str] = set()
@@ -275,6 +299,18 @@ class ModelManager:
         else:
             logger.info(f"Triton Inference Server is OFFLINE / DISABLED (TRITON_ENABLED={TRITON_ENABLED}). Using local TensorFlow fallback.")
 
+        # 12. OMDb Movie Poster Service
+        try:
+            self.poster_service = MoviePosterService(
+                api_key=OMDB_API_KEY,
+                timeout=OMDB_TIMEOUT,
+                cache_dir=POSTER_CACHE_DIR,
+            )
+            logger.info(f"Loaded MoviePosterService (OMDb configured: {bool(self.poster_service.api_key)}).")
+        except Exception as e:
+            logger.warning(f"Could not initialize MoviePosterService: {e}")
+            self.poster_service = None
+
         self.is_ready = True
         logger.info(f"ModelManager successfully initialized in {time.time() - t0:.2f}s")
 
@@ -308,6 +344,17 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def add_cache_control_headers(request: Request, call_next):
+    """Ensure frontend HTML, JS, and CSS are not cached by browser during dev/testing."""
+    response = await call_next(request)
+    if request.url.path.startswith("/static/") or request.url.path == "/":
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response
 
 
 # -----------------------------------------------------------------------------
@@ -457,6 +504,16 @@ def get_recommendations(
                 )
             )
 
+    # 4. Attach Poster URLs via MoviePosterService
+    if manager.poster_service and recommendations:
+        try:
+            items_for_posters = [{"movie_id": rec.movie_id, "title": rec.title} for rec in recommendations]
+            poster_map = manager.poster_service.get_posters_batch(items_for_posters)
+            for rec in recommendations:
+                rec.poster_url = poster_map.get(rec.movie_id)
+        except Exception as e:
+            logger.warning(f"Error fetching posters for recommendations: {e}")
+
     latency_ms = round((time.perf_counter() - t0) * 1000.0, 2)
     req_id = str(uuid.uuid4())
 
@@ -534,6 +591,16 @@ def get_candidates(
                 )
             )
 
+    # Attach poster URLs to top candidates
+    if manager.poster_service and candidates:
+        try:
+            items_for_posters = [{"movie_id": c.movie_id, "title": c.title} for c in candidates[:20]]
+            poster_map = manager.poster_service.get_posters_batch(items_for_posters)
+            for c in candidates:
+                c.poster_url = poster_map.get(c.movie_id)
+        except Exception as e:
+            logger.warning(f"Error fetching posters for candidates: {e}")
+
     latency_ms = round((time.perf_counter() - t0) * 1000.0, 2)
     return CandidateResponse(
         user_id=clean_user,
@@ -566,7 +633,55 @@ def get_popular_movies(
                 rank=rank_idx,
             )
         )
+
+    # Attach poster URLs
+    if manager.poster_service and res:
+        try:
+            items_for_posters = [{"movie_id": itm.movie_id, "title": itm.title} for itm in res]
+            poster_map = manager.poster_service.get_posters_batch(items_for_posters)
+            for itm in res:
+                itm.poster_url = poster_map.get(itm.movie_id)
+        except Exception as e:
+            logger.warning(f"Error fetching posters for popular movies: {e}")
+
     return PopularResponse(limit=len(res), movies=res)
+
+
+@app.get("/poster/{movie_id}", response_model=PosterResponse)
+def get_movie_poster_endpoint(
+    movie_id: str,
+    title: Optional[str] = Query(None, description="Optional movie title for fallback matching"),
+):
+    """Retrieve poster URL for a specific movie ID via OMDb or persistent cache."""
+    clean_id = str(movie_id).strip()
+    clean_title = title or (manager.movie_meta.get(clean_id, (None, None))[0] if manager else None)
+
+    if not manager.poster_service:
+        return PosterResponse(movie_id=clean_id, poster_url=None, title=clean_title, source="unavailable")
+
+    poster_url = manager.poster_service.get_poster(clean_id, title=clean_title)
+    return PosterResponse(
+        movie_id=clean_id,
+        poster_url=poster_url,
+        title=clean_title,
+        source="omdb" if poster_url else "none",
+    )
+
+
+@app.post("/posters/batch", response_model=PosterBatchResponse)
+def get_posters_batch_endpoint(body: PosterBatchRequest):
+    """Batch retrieve poster URLs for multiple movie IDs with bounded concurrency."""
+    if not manager.poster_service:
+        return PosterBatchResponse(posters={mid: None for mid in body.movie_ids})
+
+    items = []
+    for mid in body.movie_ids:
+        mid_str = str(mid).strip()
+        m_title = manager.movie_meta.get(mid_str, (None, None))[0] if manager else None
+        items.append({"movie_id": mid_str, "title": m_title})
+
+    posters = manager.poster_service.get_posters_batch(items)
+    return PosterBatchResponse(posters=posters)
 
 
 @app.post("/feedback")
@@ -614,6 +729,16 @@ def get_user_watchlist_endpoint(user_id: str):
                 event_id=item["event_id"],
             )
         )
+
+    # Attach poster URLs to watchlist items
+    if manager.poster_service and watchlist_detailed:
+        try:
+            items_for_posters = [{"movie_id": w.movie_id, "title": w.title} for w in watchlist_detailed]
+            poster_map = manager.poster_service.get_posters_batch(items_for_posters)
+            for w in watchlist_detailed:
+                w.poster_url = poster_map.get(w.movie_id)
+        except Exception as e:
+            logger.warning(f"Error fetching posters for watchlist: {e}")
 
     return UserFeedbackResponse(
         user_id=clean_user,
