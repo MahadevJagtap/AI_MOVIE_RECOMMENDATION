@@ -51,6 +51,8 @@ from configs.config import (
     OMDB_API_KEY,
     OMDB_TIMEOUT,
     POSTER_CACHE_DIR,
+    LIGHTWEIGHT_MODE,
+    LOAD_WIDE_ONLY,
 )
 from src.retrieval.two_tower import TwoTowerModel
 from src.retrieval.faiss_index import FAISSIndexManager
@@ -165,6 +167,7 @@ class HealthResponse(BaseModel):
     total_catalog_movies: int
     cache_stats: Dict[str, Any]
     version: str
+    serving_mode: str = "full"
 
 
 # -----------------------------------------------------------------------------
@@ -223,18 +226,23 @@ class ModelManager:
         # 2. Train History (Consumed Items for Filtering)
         train_parquet = data_dir / "train"
         if train_parquet.exists():
+            import gc
             df_t = safe_read_parquet(train_parquet, columns=["userId", "movieId"])
-            for uid, mid in zip(df_t["userId"].values, df_t["movieId"].values):
-                u_str = str(uid)
-                if u_str not in self.train_consumed:
-                    self.train_consumed[u_str] = set()
-                self.train_consumed[u_str].add(int(mid))
-            logger.info(f"Loaded consumed history for {len(self.train_consumed)} users.")
+            df_sorted = df_t.sort_values(["userId", "movieId"])
+            self.train_consumed = {
+                str(k): v["movieId"].to_numpy(dtype=np.int32)
+                for k, v in df_sorted.groupby("userId")
+            }
+            del df_t, df_sorted
+            gc.collect()
+            logger.info(f"Loaded consumed history for {len(self.train_consumed)} users (compact).")
 
         # 3. Two-Tower Model
         if retrieval_dir.exists():
+            import gc
             self.two_tower = TwoTowerModel.load_artifacts(retrieval_dir)
             self.user_vocab_set = set(str(u) for u in self.two_tower.user_vocab)
+            gc.collect()
             logger.info(f"Loaded TwoTowerModel with {len(self.user_vocab_set)} learned users.")
 
         # 4. FAISS Index
@@ -242,27 +250,39 @@ class ModelManager:
             self.faiss_manager = FAISSIndexManager.load_artifacts(faiss_dir)
             logger.info(f"Loaded FAISSIndexManager with {self.faiss_manager.total_items} items.")
 
-        # 5. Ranking Feature Pipeline
-        pipeline_dir = ranking_dir / "pipeline"
-        if pipeline_dir.exists():
-            self.feature_pipeline = RankingFeaturePipeline.load(
-                pipeline_dir,
-                processed_data_dir=data_dir,
-                retrieval_model_dir=retrieval_dir,
-            )
-            logger.info("Loaded RankingFeaturePipeline.")
+        # 5. Ranking Feature Pipeline and Neural Ranking Models
+        if not LIGHTWEIGHT_MODE:
+            # Reusing loaded TwoTowerModel to avoid duplicate 170MB memory
+            pipeline_dir = ranking_dir / "pipeline"
+            if pipeline_dir.exists():
+                import gc
+                self.feature_pipeline = RankingFeaturePipeline.load(
+                    pipeline_dir,
+                    processed_data_dir=data_dir,
+                    retrieval_model_dir=retrieval_dir,
+                    two_tower_model=self.two_tower,
+                )
+                gc.collect()
+                logger.info("Loaded RankingFeaturePipeline.")
 
-        # 6. Wide-only Ranking Model (Variant A)
-        wide_dir = ranking_dir / "wide_only"
-        if wide_dir.exists():
-            self.wide_model = WideOnlyModel.load_artifacts(wide_dir)
-            logger.info("Loaded WideOnlyModel.")
+            # 6. Wide-only Ranking Model (Variant A) - loaded if explicitly requested
+            if LOAD_WIDE_ONLY:
+                wide_dir = ranking_dir / "wide_only"
+                if wide_dir.exists():
+                    import gc
+                    self.wide_model = WideOnlyModel.load_artifacts(wide_dir)
+                    gc.collect()
+                    logger.info("Loaded WideOnlyModel.")
 
-        # 7. Wide & Deep Ranking Model (Variant B)
-        wd_dir = ranking_dir / "wide_and_deep"
-        if wd_dir.exists():
-            self.wd_model = WideAndDeepModel.load_artifacts(wd_dir)
-            logger.info("Loaded WideAndDeepModel.")
+            # 7. Wide & Deep Ranking Model (Variant B) - primary production reranker
+            wd_dir = ranking_dir / "wide_and_deep"
+            if wd_dir.exists():
+                import gc
+                self.wd_model = WideAndDeepModel.load_artifacts(wd_dir)
+                gc.collect()
+                logger.info("Loaded WideAndDeepModel.")
+        else:
+            logger.info("LIGHTWEIGHT_MODE enabled: Skipping Wide & Deep ranking models to preserve memory under 512 MiB.")
 
         # 8. Popularity Recommender (Cold-Start Fallback)
         pop_path = data_dir / "popularity"
@@ -372,18 +392,34 @@ def get_health():
         "popularity": manager.popularity is not None,
         "triton_server": manager.triton_client.is_available() if manager.triton_client else False,
     }
-    all_ready = all(
-        v for k, v in models_status.items() if k != "triton_server"
-    ) and manager.is_ready
+    if LIGHTWEIGHT_MODE:
+        core_ready = (
+            models_status["two_tower"]
+            and models_status["faiss_index"]
+            and models_status["popularity"]
+            and manager.is_ready
+        )
+        current_mode = "lightweight"
+    else:
+        core_ready = (
+            models_status["two_tower"]
+            and models_status["faiss_index"]
+            and models_status["popularity"]
+            and (models_status["ranking_wide_and_deep"] or models_status["ranking_wide_only"])
+            and manager.is_ready
+        )
+        current_mode = "full"
+
     cache_stats = manager.cache.get_stats() if manager.cache else {}
 
     return HealthResponse(
-        status="healthy" if all_ready else "degraded",
+        status="healthy" if core_ready else "degraded",
         redis_connected=manager.cache.is_connected if manager.cache else False,
         models_loaded=models_status,
         total_catalog_movies=len(manager.movie_meta),
         cache_stats=cache_stats,
         version=MODEL_VERSION,
+        serving_mode=current_mode,
     )
 
 
@@ -422,11 +458,12 @@ def get_recommendations(
 
     # 2. Check User Status: Warm vs Cold-Start
     is_cold_start = clean_user not in manager.user_vocab_set
-    filter_consumed_set = manager.train_consumed.get(clean_user, set())
+    filter_consumed_set = set(manager.train_consumed.get(clean_user, ()))
 
     recommendations: List[RecommendationItem] = []
+    has_stage2 = False
 
-    if not is_cold_start and manager.two_tower and manager.faiss_manager and manager.feature_pipeline:
+    if not is_cold_start and manager.two_tower and manager.faiss_manager:
         try:
             # Stage 1: Two-Tower Vector Candidate Retrieval (Triton or local fallback)
             if manager.triton_client and manager.triton_client.is_available():
@@ -448,21 +485,36 @@ def get_recommendations(
             if candidate_pool:
                 cand_ids = [str(mid) for mid, _ in candidate_pool]
 
-                # Stage 2: Feature Transformation & Main Ranking
-                cand_features = manager.feature_pipeline.transform_candidates(clean_user, cand_ids)
+                has_stage2 = (
+                    not LIGHTWEIGHT_MODE
+                    and manager.feature_pipeline is not None
+                    and (manager.wd_model is not None or manager.wide_model is not None)
+                )
 
-                if clean_variant == "wide_only" and manager.wide_model:
-                    scores = manager.wide_model.predict_scores(cand_features)
-                elif manager.triton_client and manager.triton_client.is_available():
-                    try:
-                        scores = manager.triton_client.infer_ranking_scores(cand_features)
-                    except Exception as e:
-                        logger.warning(f"Triton ranking_model error ({e}); using local WideAndDeepModel.")
-                        scores = manager.wd_model.predict_scores(cand_features) if manager.wd_model else np.array([score for _, score in candidate_pool], dtype=np.float32)
-                elif manager.wd_model:
-                    scores = manager.wd_model.predict_scores(cand_features)
+                if has_stage2:
+                    # Stage 2: Feature Transformation & Main Ranking
+                    cand_features = manager.feature_pipeline.transform_candidates(clean_user, cand_ids)
+
+                    if clean_variant == "wide_only" and manager.wide_model:
+                        scores = manager.wide_model.predict_scores(cand_features)
+                        rec_source = "two_stage_ranking"
+                    elif manager.triton_client and manager.triton_client.is_available():
+                        try:
+                            scores = manager.triton_client.infer_ranking_scores(cand_features)
+                        except Exception as e:
+                            logger.warning(f"Triton ranking_model error ({e}); using local WideAndDeepModel.")
+                            scores = manager.wd_model.predict_scores(cand_features) if manager.wd_model else np.array([score for _, score in candidate_pool], dtype=np.float32)
+                        rec_source = "two_stage_ranking"
+                    elif manager.wd_model:
+                        scores = manager.wd_model.predict_scores(cand_features)
+                        rec_source = "two_stage_ranking"
+                    else:
+                        scores = np.array([score for _, score in candidate_pool], dtype=np.float32)
+                        rec_source = "two_tower_retrieval"
                 else:
+                    # Lightweight mode: vector similarity directly
                     scores = np.array([score for _, score in candidate_pool], dtype=np.float32)
+                    rec_source = "two_tower_retrieval"
 
                 # Sort candidates descending by predicted score
                 sorted_indices = np.argsort(-scores)[:k]
@@ -476,11 +528,11 @@ def get_recommendations(
                             genres=genres,
                             score=float(round(scores[idx], 4)),
                             rank=rank_idx,
-                            source="two_stage_ranking",
+                            source=rec_source,
                         )
                     )
         except Exception as e:
-            logger.warning(f"Error during two-stage ranking for user {clean_user}: {e}. Triggering fallback.")
+            logger.warning(f"Error during candidate retrieval / ranking for user {clean_user}: {e}. Triggering fallback.")
             is_cold_start = True
 
     # 3. Fallback: Popularity Recommender (for cold-start or empty retrieval)
@@ -521,7 +573,7 @@ def get_recommendations(
         "request_id": req_id,
         "user_id": clean_user,
         "k": len(recommendations),
-        "variant": clean_variant,
+        "variant": clean_variant if has_stage2 else ("popularity_fallback" if is_cold_start else "two_tower_retrieval"),
         "model_version": MODEL_VERSION,
         "cached": False,
         "is_cold_start": is_cold_start,
@@ -548,7 +600,7 @@ def get_candidates(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="user_id cannot be empty")
 
     is_cold_start = clean_user not in manager.user_vocab_set
-    filter_consumed_set = manager.train_consumed.get(clean_user, set())
+    filter_consumed_set = set(manager.train_consumed.get(clean_user, ()))
 
     candidates: List[CandidateItem] = []
 

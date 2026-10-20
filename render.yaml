@@ -22,3 +22,9 @@ services:
         value: "127.0.0.1"
       - key: MALLOC_ARENA_MAX
         value: "2"
+      - key: LIGHTWEIGHT_MODE
+        value: "True"
+      - key: LOAD_WIDE_ONLY
+        value: "False"
+      - key: OMDB_API_KEY
+        value: "8c74f589"

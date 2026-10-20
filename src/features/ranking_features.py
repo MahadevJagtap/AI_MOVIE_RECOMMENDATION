@@ -25,7 +25,7 @@ os.environ.setdefault("TF_USE_LEGACY_KERAS", "1")
 import json
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -61,6 +61,9 @@ class RankingFeaturePipeline:
         self._user_stats_cache: Dict[str, Tuple[float, float]] = {}
         self._movie_stats_cache: Dict[str, Tuple[float, float, str]] = {}
         self._populate_caches()
+        # Free heavy DataFrames once lookup cache is populated
+        self.user_features_df = None
+        self.movie_features_df = None
 
     def _populate_caches(self):
         """Populate in-memory lookup dicts for high-throughput single-item/candidate inference."""
@@ -381,8 +384,11 @@ class RankingFeaturePipeline:
         save_dir: Union[str, Path],
         processed_data_dir: Optional[Union[str, Path]] = None,
         retrieval_model_dir: Optional[Union[str, Path]] = None,
+        two_tower_model: Optional[Any] = None,
     ) -> "RankingFeaturePipeline":
-        """Load pipeline from persisted configuration."""
+        """Load pipeline from persisted configuration with memory optimizations."""
+        import gc
+
         save_path = Path(save_dir)
         config_file = save_path / "ranking_pipeline_config.json"
         if not config_file.exists():
@@ -400,8 +406,14 @@ class RankingFeaturePipeline:
         movie_df = None
         if processed_data_dir is not None:
             p_path = Path(processed_data_dir)
-            user_df = pd.read_parquet(p_path / "user_features")
-            movie_df = pd.read_parquet(p_path / "movie_features")
+            user_df = pd.read_parquet(
+                p_path / "user_features",
+                columns=["userId", "user_train_rating_count", "user_train_avg_rating"],
+            )
+            movie_df = pd.read_parquet(
+                p_path / "movie_features",
+                columns=["movieId", "movie_train_rating_count", "movie_train_avg_rating", "genres"],
+            )
 
         user_embeddings = {}
         movie_embeddings = {}
@@ -416,12 +428,19 @@ class RankingFeaturePipeline:
                     movie_embeddings[str(mid)] = emb
 
             try:
-                from src.retrieval.two_tower import TwoTowerModel
-                tt_model = TwoTowerModel.load_artifacts(r_path)
+                if two_tower_model is not None:
+                    tt_model = two_tower_model
+                else:
+                    from src.retrieval.two_tower import TwoTowerModel
+                    tt_model = TwoTowerModel.load_artifacts(r_path)
+
                 user_ids_tensor = tf.constant(user_vocab, dtype=tf.string)
                 user_embs_array = tt_model.user_tower(user_ids_tensor).numpy()
                 for uid, emb in zip(user_vocab, user_embs_array):
                     user_embeddings[str(uid)] = emb
+                del user_ids_tensor, user_embs_array
+                if two_tower_model is None:
+                    del tt_model
             except Exception as e:
                 logger.warning(f"Could not load TwoTower user embeddings: {e}")
 
@@ -435,4 +454,6 @@ class RankingFeaturePipeline:
             movie_vocab=movie_vocab,
             genre_vocab=genre_vocab,
         )
+        del user_df, movie_df
+        gc.collect()
         return pipeline

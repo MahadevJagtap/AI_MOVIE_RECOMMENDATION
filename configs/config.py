@@ -91,6 +91,10 @@ REDIS_TTL = _env_int("REDIS_TTL", 3600)  # 1 hour
 API_HOST = _env("API_HOST", "0.0.0.0")
 API_PORT = _env_int("API_PORT", 8000)
 
+# ── Serving Mode & Memory Optimization ──────────────────────────────
+LIGHTWEIGHT_MODE = _env_bool("LIGHTWEIGHT_MODE", False)
+LOAD_WIDE_ONLY = _env_bool("LOAD_WIDE_ONLY", True)
+
 # ── Triton ──────────────────────────────────────────────────────────
 TRITON_URL = _env("TRITON_URL", "localhost:8001")
 TRITON_ENABLED = _env_bool("TRITON_ENABLED", False)
