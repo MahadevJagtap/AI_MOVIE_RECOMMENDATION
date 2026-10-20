@@ -1,24 +1,34 @@
-# CineMatch: Large-Scale Personalized Recommendation Engine
+# 🎬 CineMatch: Large-Scale Personalized Recommendation Engine
 
-[![Python](https://img.shields.io/badge/Python-3.11%20%7C%203.12-blue.svg)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688.svg)](https://fastapi.tiangolo.com/)
-[![TensorFlow](https://img.shields.io/badge/TensorFlow-2.16.2-FF6F00.svg)](https://www.tensorflow.org/)
-[![FAISS](https://img.shields.io/badge/FAISS-CPU%201.9.0-00599C.svg)](https://github.com/facebookresearch/faiss)
-[![Render](https://img.shields.io/badge/Deploy%20on-Render-46E3B7.svg)](https://render.com/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+<div align="center">
 
-A production-grade, two-stage personalized movie recommendation engine built on the **MovieLens 25M** dataset (25,000,095 ratings across 62,423 movies). Designed following industry best practices (inspired by Netflix and YouTube architectures), CineMatch combines high-throughput vector retrieval with deep neural re-ranking, delivering personalized recommendations in under **35 milliseconds**.
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Render-46E3B7?style=for-the-badge&logo=render&logoColor=white)](https://ai-movie-recommendation-system-it9r.onrender.com/)
+[![API Docs](https://img.shields.io/badge/Swagger-API%20Docs-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://ai-movie-recommendation-system-it9r.onrender.com/docs)
+[![Python](https://img.shields.io/badge/Python-3.11%20%7C%203.12-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![TensorFlow](https://img.shields.io/badge/TensorFlow-TFRS-FF6F00?style=for-the-badge&logo=tensorflow&logoColor=white)](https://www.tensorflow.org/)
+[![FAISS](https://img.shields.io/badge/FAISS-CPU-00599C?style=for-the-badge&logo=meta&logoColor=white)](https://github.com/facebookresearch/faiss)
+[![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
 
-**GitHub Repository:** [https://github.com/MahadevJagtap/AI_MOVIE_RECOMMENDATION](https://github.com/MahadevJagtap/AI_MOVIE_RECOMMENDATION)  
-**Live Cloud Demo:** Deployed natively on Render at `https://cinematch.onrender.com`
+### 🌟 [Click Here to Launch Live Interactive Web App](https://ai-movie-recommendation-system-it9r.onrender.com/) 🌟
+**Live Demo:** [https://ai-movie-recommendation-system-it9r.onrender.com](https://ai-movie-recommendation-system-it9r.onrender.com/) &nbsp;|&nbsp; **Swagger API:** [https://ai-movie-recommendation-system-it9r.onrender.com/docs](https://ai-movie-recommendation-system-it9r.onrender.com/docs) &nbsp;|&nbsp; **Health Status:** [https://ai-movie-recommendation-system-it9r.onrender.com/health](https://ai-movie-recommendation-system-it9r.onrender.com/health)
+
+</div>
+
+---
+
+A production-grade, two-stage personalized movie recommendation engine built on the **MovieLens 25M** dataset (25,000,095 ratings across 62,423 movies). Designed following industry best practices (inspired by Netflix and YouTube architectures), CineMatch combines high-throughput vector retrieval with deep neural re-ranking, delivering personalized recommendations with real-time OMDb poster artwork.
+
+- 🌐 **Public Live Demo:** [https://ai-movie-recommendation-system-it9r.onrender.com/](https://ai-movie-recommendation-system-it9r.onrender.com/)
+- 💻 **GitHub Repository:** [https://github.com/MahadevJagtap/AI_MOVIE_RECOMMENDATION](https://github.com/MahadevJagtap/AI_MOVIE_RECOMMENDATION)
 
 ---
 
 ## 📌 Project Deliverables & Key Documentation
 
-| Deliverable | Description | Link |
+| Deliverable | Description | Access Link |
 | :--- | :--- | :--- |
-| 🌐 **Live Web Demo** | Deployed interactive web discovery app on Render | [Render Deployment Guide](#-cloud-deployment-on-render) |
+| 🌐 **Live Web Discovery App** | Live interactive movie recommendation app with profile switching & OMDb posters | [**Launch Live Demo ↗**](https://ai-movie-recommendation-system-it9r.onrender.com/) |
+| 📖 **Interactive Swagger UI** | Live REST API explorer, parameter testing, and schema definitions | [**Open API Docs ↗**](https://ai-movie-recommendation-system-it9r.onrender.com/docs) |
 | 🏗️ **System Architecture & API** | In-depth two-stage funnel diagrams, feature store, and REST API specification | [`docs/ARCHITECTURE_AND_API.md`](docs/ARCHITECTURE_AND_API.md) |
 | 📊 **Evaluation & Test Results** | Offline metrics (NDCG@10, MRR, AUC), 32/32 Pytest results, and latency benchmarks | [`docs/PERFORMANCE_AND_TEST_RESULTS.md`](docs/PERFORMANCE_AND_TEST_RESULTS.md) |
 | 🎤 **10-Minute Presentation Deck** | Slide-by-slide final presentation deck, speaker notes, and timing allocation | [`docs/FINAL_PRESENTATION_DECK.md`](docs/FINAL_PRESENTATION_DECK.md) |
@@ -190,7 +200,7 @@ This repository includes turnkey configuration for deploying on [Render](https:/
    - `MALLOC_ARENA_MAX`: `2`
    - `OMDB_API_KEY`: `your_omdb_api_key` *(Set as a secure environment variable or Secret)*
 5. Under **Advanced**, set **Health Check Path** to `/health`.
-6. Click **Create Web Service**. Your live recommendation engine will be available at `https://<service-name>.onrender.com`.
+6. Click **Create Web Service**. Your live recommendation engine will be available at [https://ai-movie-recommendation-system-it9r.onrender.com](https://ai-movie-recommendation-system-it9r.onrender.com).
 
 ### Google Cloud Run Deployment:
 For containerized deployment on Google Cloud Run:
