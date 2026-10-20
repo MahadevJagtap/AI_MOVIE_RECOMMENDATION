@@ -63,7 +63,7 @@ A comprehensive, multi-phase engineering audit and targeted verification pass wa
 
 ```mermaid
 graph TD
-    Client["Browser UI (HTML/CSS/JS)"] -->|HTTP GET /recommend/{user_id}| API["FastAPI Serving API (src/serving/api.py)"]
+    Client["Browser UI (HTML/CSS/JS)"] -->|"HTTP GET /recommend/{user_id}"| API["FastAPI Serving API (src/serving/api.py)"]
     API -->|Check Cache| Redis["Redis Cache Manager"]
     Redis -- Cache Miss --> VocabCheck{"User in Training Cohort?"}
     VocabCheck -- Yes (Known User) --> TwoTower["Two-Tower User Embedding (64-dim)"]

@@ -23,52 +23,52 @@ Recommending personalized items over a 62,000+ item catalog cannot be done via a
 
 ```mermaid
 flowchart TD
-    subgraph DataPipeline [Offline ETL & Feature Store]
-        ML[MovieLens 25M Dataset] --> Spark[PySpark Chronological Processing]
-        Spark --> TrainData[Train Set: 893k Interactions]
-        Spark --> MovieFeatures[Movie Features Parquet: 62k Items]
-        Spark --> UserFeatures[User Activity Parquet: 6.1k Users]
-        Spark --> PopularityTable[Top 500 Popularity Parquet]
+    subgraph DataPipeline ["Offline ETL & Feature Store"]
+        ML["MovieLens 25M Dataset"] --> Spark["PySpark Chronological Processing"]
+        Spark --> TrainData["Train Set: 893k Interactions"]
+        Spark --> MovieFeatures["Movie Features Parquet: 62k Items"]
+        Spark --> UserFeatures["User Activity Parquet: 6.1k Users"]
+        Spark --> PopularityTable["Top 500 Popularity Parquet"]
     end
 
-    subgraph ModelTraining [Model Training & Indexing]
-        TrainData --> TwoTowerTrain[TFRS Two-Tower Model]
-        TwoTowerTrain --> MovieEmbeddings[64-dim Catalog Embeddings]
-        TwoTowerTrain --> UserTowerWeights[User Tower Saved Weights]
-        MovieEmbeddings --> FAISSBuild[FAISS IndexFlatIP Index]
-        FAISSBuild --> FAISSBin[faiss_index.bin]
+    subgraph ModelTraining ["Model Training & Indexing"]
+        TrainData --> TwoTowerTrain["TFRS Two-Tower Model"]
+        TwoTowerTrain --> MovieEmbeddings["64-dim Catalog Embeddings"]
+        TwoTowerTrain --> UserTowerWeights["User Tower Saved Weights"]
+        MovieEmbeddings --> FAISSBuild["FAISS IndexFlatIP Index"]
+        FAISSBuild --> FAISSBin["faiss_index.bin"]
         
-        TrainData --> FeaturePipelines[Feature Pipeline & Crosses]
-        FeaturePipelines --> WideDeepTrain[Wide & Deep Model Training]
-        WideDeepTrain --> RankingWeights[Wide & Deep Weights & Config]
+        TrainData --> FeaturePipelines["Feature Pipeline & Crosses"]
+        FeaturePipelines --> WideDeepTrain["Wide & Deep Model Training"]
+        WideDeepTrain --> RankingWeights["Wide & Deep Weights & Config"]
     end
 
-    subgraph ServingLayer [FastAPI Production Serving]
-        ClientReq[Incoming User Request: /recommend/{user_id}] --> CacheCheck{Redis Cache Hit?}
-        CacheCheck -- Yes --> CacheReturn[Return Cached JSON < 5ms]
-        CacheCheck -- No / Degraded --> ModelManager[ModelManager Orchestrator]
+    subgraph ServingLayer ["FastAPI Production Serving"]
+        ClientReq["Incoming User Request: /recommend/:user_id"] --> CacheCheck{"Redis Cache Hit?"}
+        CacheCheck -- "Yes" --> CacheReturn["Return Cached JSON (< 5ms)"]
+        CacheCheck -- "No / Degraded" --> ModelManager["ModelManager Orchestrator"]
 
-        ModelManager --> UserCheck{User in Train Set?}
-        UserCheck -- Cold Start --> PopFallback[Popularity Fallback Recommender]
-        UserCheck -- Known User --> Stage1[Stage 1: Two-Tower User Embedding]
+        ModelManager --> UserCheck{"User in Train Set?"}
+        UserCheck -- "Cold Start" --> PopFallback["Popularity Fallback Recommender"]
+        UserCheck -- "Known User" --> Stage1["Stage 1: Two-Tower User Embedding"]
         
-        Stage1 --> FAISSSearch[FAISS Vector Search over 62k Items]
-        FAISSSearch --> TopKCandidates[Top 100 Candidate IDs]
-        TopKCandidates --> FilterHistory[Deduplicate Previously Watched Movies]
+        Stage1 --> FAISSSearch["FAISS Vector Search over 62k Items"]
+        FAISSSearch --> TopKCandidates["Top 100 Candidate IDs"]
+        TopKCandidates --> FilterHistory["Deduplicate Previously Watched Movies"]
         
-        FilterHistory --> Stage2[Stage 2: Wide & Deep Neural Re-ranking]
-        Stage2 --> TopRanked[Top-N Ranked Recommendations]
-        TopRanked --> WriteCache[Write to Redis with TTL]
-        TopRanked --> JSONResp[Return HTTP 200 Response]
+        FilterHistory --> Stage2["Stage 2: Wide & Deep Neural Re-ranking"]
+        Stage2 --> TopRanked["Top-N Ranked Recommendations"]
+        TopRanked --> WriteCache["Write to Redis with TTL"]
+        TopRanked --> JSONResp["Return HTTP 200 Response"]
         PopFallback --> JSONResp
     end
 
-    subgraph FrontendUI [Frontend & Interaction Loop]
-        JSONResp --> WebUI[CineMatch Modern Web UI]
-        WebUI --> UserClicks[User Watchlist / Impression Events]
-        UserClicks --> FeedbackAPI[POST /feedback]
-        FeedbackAPI --> FeedbackDB[(SQLite feedback.db)]
-        FeedbackDB --> CTRMetrics[GET /metrics/ctr]
+    subgraph FrontendUI ["Frontend & Interaction Loop"]
+        JSONResp --> WebUI["CineMatch Modern Web UI"]
+        WebUI --> UserClicks["User Watchlist / Impression Events"]
+        UserClicks --> FeedbackAPI["POST /feedback"]
+        FeedbackAPI --> FeedbackDB[("SQLite feedback.db")]
+        FeedbackDB --> CTRMetrics["GET /metrics/ctr"]
     end
 ```
 
